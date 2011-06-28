@@ -95,3 +95,21 @@ the consumption of the message by another thread.
         }
         
     }
+
+# Maven
+To use this with Berkeley DB Java Edition you must add the following maven dependency to your pom.xml (or s.th. similar for other tools):
+
+    <dependency>
+        <groupId>com.sleepycat</groupId>
+        <artifactId>je</artifactId>
+        <version>4.1.10</version>
+    </dependency>
+
+Additionally you must add this repository:
+
+    <repository>
+        <id>oracle releases</id>
+        <name>Oracle Released Java Packages</name>
+        <url>http://download.oracle.com/maven</url>
+        <layout>default</layout>
+    </repository>
