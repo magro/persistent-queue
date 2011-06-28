@@ -11,16 +11,16 @@
 	</parent>
 
 	<groupId>de.javakaffee</groupId>
-	<artifactId>simple-queue</artifactId>
-	<version>1.1-SNAPSHOT</version>
+	<artifactId>persistent-queue</artifactId>
+	<version>1.0-SNAPSHOT</version>
 	<packaging>jar</packaging>
 	<name>jsr303 validators</name>
 	<description>Some custom jsr303 validators</description>
-	<url>https://github.com/magro/simple-queue</url>
+	<url>https://github.com/magro/persistent-queue</url>
 
 	<issueManagement>
 		<system>github.com</system>
-		<url>https://github.com/magro/simple-queue/issues</url>
+		<url>https://github.com/magro/persistent-queue/issues</url>
 	</issueManagement>
 	<inceptionYear>2010</inceptionYear>
 	<prerequisites>
@@ -34,9 +34,9 @@
 		</license>
 	</licenses>
 	<scm>
-		<connection>scm:git:git@github.com:magro/simple-queue.git</connection>
-		<developerConnection>scm:git:git@github.com:magro/simple-queue.git</developerConnection>
-		<url>git@github.com:magro/simple-queue.git</url>
+		<connection>scm:git:git@github.com:magro/persistent-queue.git</connection>
+		<developerConnection>scm:git:git@github.com:magro/persistent-queue.git</developerConnection>
+		<url>git@github.com:magro/persistent-queue.git</url>
 	</scm>
 	<developers>
 		<developer>
