@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.math.BigInteger;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 import javax.annotation.Nonnull;
@@ -26,10 +27,12 @@ import com.sleepycat.je.Cursor;
 import com.sleepycat.je.Database;
 import com.sleepycat.je.DatabaseConfig;
 import com.sleepycat.je.DatabaseEntry;
+import com.sleepycat.je.DatabaseException;
 import com.sleepycat.je.Environment;
 import com.sleepycat.je.EnvironmentConfig;
 import com.sleepycat.je.LockMode;
 import com.sleepycat.je.OperationStatus;
+import com.sleepycat.util.RuntimeExceptionWrapper;
 
 /**
  * 
@@ -81,19 +84,40 @@ public class BDBQueue {
     public BDBQueue(final String queueEnvPath,
                  final String queueName,
                  final int cacheSize) throws IOException {
+        this(queueEnvPath, queueName, cacheSize, false, true);
+    }
+ 
+    /**
+     * Creates instance of persistent queue.
+     *
+     * @param queueEnvPath   queue database environment directory path
+     * @param queueName      descriptive queue name
+     * @param cacheSize      how often to sync the queue to disk
+     * @param readOnly       if the db shall be accessed readonly
+     * @param allowCreate    if true, the db environment is created if it does not exist.
+     * @throws IOException   thrown when the given queueEnvPath does not exist and cannot be created.
+     */
+    public BDBQueue(final String queueEnvPath,
+                 final String queueName,
+                 final int cacheSize,
+                 final boolean readOnly,
+                 final boolean allowCreate) throws IOException {
+        
         // Create parent dirs for queue environment directory
-        mkdir(new File(queueEnvPath));
+        mkdir(new File(queueEnvPath), allowCreate);
  
         // Setup database environment
         final EnvironmentConfig dbEnvConfig = new EnvironmentConfig();
         dbEnvConfig.setTransactional(false);
-        dbEnvConfig.setAllowCreate(true);
+        dbEnvConfig.setAllowCreate(allowCreate);
+        dbEnvConfig.setReadOnly(readOnly);
         this.dbEnv = new Environment(new File(queueEnvPath), dbEnvConfig);
  
         // Setup non-transactional deferred-write queue database
         final DatabaseConfig dbConfig = new DatabaseConfig();
         dbConfig.setTransactional(false);
-        dbConfig.setAllowCreate(true);
+        dbConfig.setAllowCreate(allowCreate);
+        dbConfig.setReadOnly(readOnly);
         dbConfig.setDeferredWrite(true);
         dbConfig.setBtreeComparator(new KeyComparator());
         this.queueDatabase = dbEnv.openDatabase(null, queueName, dbConfig);
@@ -105,12 +129,18 @@ public class BDBQueue {
     /**
      * Asserts that the given directory exists and creates it if necessary.
      * @param dir the directory that shall exist
+     * @param createDirectoryIfNotExisting specifies if the directory shall be created if it does not exist.
      * @throws IOException thrown if the directory could not be created.
      */
-    public static void mkdir( @Nonnull final File dir ) throws IOException {
+    public static void mkdir( @Nonnull final File dir, boolean createDirectoryIfNotExisting ) throws IOException {
         // commons io FileUtils.forceMkdir would be useful here, we just want to omit this dependency
-        if (!dir.exists() && !dir.mkdirs()) {            
-            throw new IOException( "Could not create directory " + dir.getAbsolutePath() );
+        if (!dir.exists()) {
+            if(!createDirectoryIfNotExisting) {
+                throw new IOException( "The directory " + dir.getAbsolutePath() + " does not exist." );
+            }
+            if(!dir.mkdirs()) {
+                throw new IOException( "Could not create directory " + dir.getAbsolutePath() );
+            }
         }
         if (!dir.isDirectory()) {
             throw new IOException("File " + dir + " exists and is not a directory. Unable to create directory.");
@@ -143,6 +173,64 @@ public class BDBQueue {
         } finally {
             cursor.close();
         }
+    }
+
+    /**
+     * Returns an iterator over the elements in this queue.
+     *
+     * @return an iterator over elemtns of the queue.
+     *
+     * @throws IOException in case of disk IO failure
+     */
+    public synchronized CloseableIterator<byte[]> iterator() throws IOException {
+      final DatabaseEntry key = new DatabaseEntry();
+      final DatabaseEntry data = new DatabaseEntry();
+      final Cursor cursor = queueDatabase.openCursor(null, null);
+
+      return new CloseableIterator<byte[]>() {
+          
+        private byte[] nextValue;
+        
+        @Override
+        public void close() {
+            cursor.close();
+        }
+
+        @Override
+        public boolean hasNext() {
+            if (nextValue == null) {
+                try {
+                    final OperationStatus status = cursor.getNext(key, data, LockMode.READ_UNCOMMITTED);
+                    if(status != OperationStatus.SUCCESS && status != OperationStatus.NOTFOUND) {
+                        throw new IllegalStateException("Getting next element did not return successfully: " + status);
+                    }
+                    nextValue = status == OperationStatus.SUCCESS ? data.getData() : null;
+                } catch (DatabaseException e) {
+                    throw RuntimeExceptionWrapper.wrapIfNeeded(e);
+                }
+                return nextValue != null;
+            } else {
+                return true;
+            }
+        }
+        
+        @Override
+        public byte[] next() {
+            if (hasNext()) {
+                byte[] v = nextValue;
+                nextValue = null;
+                return v;
+            } else {
+                throw new NoSuchElementException();
+            }
+        }
+        
+        @Override
+        public void remove() {
+            cursor.delete();
+        }
+          
+      };
     }
 
     /**
@@ -282,6 +370,13 @@ public class BDBQueue {
     public void close() {
         queueDatabase.close();
         dbEnv.close();
+    }
+    
+    public static interface CloseableIterator<T> extends Iterator<T> {
+        /**
+         * Must be invoked when the iterator is no longer used.
+         */
+        void close();
     }
     
 }

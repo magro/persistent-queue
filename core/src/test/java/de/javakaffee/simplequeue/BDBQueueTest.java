@@ -13,13 +13,18 @@
  */
 package de.javakaffee.simplequeue;
 
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
+
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -28,10 +33,7 @@ import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
 
-import de.javakaffee.simplequeue.BDBQueue;
-
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
+import de.javakaffee.simplequeue.BDBQueue.CloseableIterator;
 
 /**
  * Test for {@link BDBQueue}.
@@ -62,6 +64,27 @@ public class BDBQueueTest {
         final BDBQueue queue = new BDBQueue(_queueDir.getPath(), "test-queue", 3);
         try {
             assertTrue(Arrays.asList(_queueDir.listFiles()).contains(new File(_queueDir, "00000000.jdb")));
+        } finally {
+            queue.close();
+        }
+    }
+
+    @Test
+    public void testIterator() throws Throwable {
+        final BDBQueue queue = new BDBQueue(_queueDir.getPath(), "test-queue", 3);
+        try {
+            queue.push("1".getBytes(UTF8));
+            queue.push("2".getBytes(UTF8));
+            final CloseableIterator<byte[]> iter = queue.iterator();
+            assertTrue(iter.hasNext());
+            final List<String> found = new ArrayList<String>();
+            while(iter.hasNext()) {
+                found.add(new String(iter.next(), UTF8));
+            }
+            assertEquals(found.size(), 2);
+            assertEquals(found, Arrays.asList("1", "2"));
+            
+            iter.close();
         } finally {
             queue.close();
         }
@@ -238,7 +261,7 @@ public class BDBQueueTest {
  
     public static File createTempSubdir(final String name) throws IOException {
         final File dir = new File(TMP_DIR, name);
-        BDBQueue.mkdir(dir);
+        BDBQueue.mkdir(dir, true);
         return dir;
     }
     
