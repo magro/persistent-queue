@@ -35,44 +35,44 @@ import com.sleepycat.je.OperationStatus;
 import com.sleepycat.util.RuntimeExceptionWrapper;
 
 /**
- * 
+ *
  * Fast queue implementation on top of Berkley DB Java Edition. This class is thread-safe.
  * <p>
  * This is based on
  * <a href="http://sysgears.com/articles/lightweight-fast-persistent-queue-in-java-using-berkley-db"></a>.
  * </p>
- * 
+ *
  * Created on Jun 27, 2011
  *
  * @author Martin Grotzke (initial creation)
  */
 public class BDBQueue {
-    
+
     /**
      * Berkley DB environment.
      */
     private final Environment dbEnv;
- 
+
     /**
      * Berkley DB instance for the queue.
      */
     private final Database queueDatabase;
- 
+
     /**
      * Queue cache size - number of element operations it is allowed to loose in case of system crash.
      */
     private final int cacheSize;
- 
+
     /**
      * This queue name.
      */
     private final String queueName;
- 
+
     /**
      * Queue operation counter, which is used to sync the queue database to disk periodically.
      */
     private int opsCounter;
- 
+
     /**
      * Creates instance of persistent queue.
      *
@@ -86,7 +86,7 @@ public class BDBQueue {
                  final int cacheSize) throws IOException {
         this(queueEnvPath, queueName, cacheSize, false, true);
     }
- 
+
     /**
      * Creates instance of persistent queue.
      *
@@ -102,17 +102,17 @@ public class BDBQueue {
                  final int cacheSize,
                  final boolean readOnly,
                  final boolean allowCreate) throws IOException {
-        
+
         // Create parent dirs for queue environment directory
         mkdir(new File(queueEnvPath), allowCreate);
- 
+
         // Setup database environment
         final EnvironmentConfig dbEnvConfig = new EnvironmentConfig();
         dbEnvConfig.setTransactional(false);
         dbEnvConfig.setAllowCreate(allowCreate);
         dbEnvConfig.setReadOnly(readOnly);
         this.dbEnv = new Environment(new File(queueEnvPath), dbEnvConfig);
- 
+
         // Setup non-transactional deferred-write queue database
         final DatabaseConfig dbConfig = new DatabaseConfig();
         dbConfig.setTransactional(false);
@@ -132,7 +132,7 @@ public class BDBQueue {
      * @param createDirectoryIfNotExisting specifies if the directory shall be created if it does not exist.
      * @throws IOException thrown if the directory could not be created.
      */
-    public static void mkdir( @Nonnull final File dir, boolean createDirectoryIfNotExisting ) throws IOException {
+    public static void mkdir( @Nonnull final File dir, final boolean createDirectoryIfNotExisting ) throws IOException {
         // commons io FileUtils.forceMkdir would be useful here, we just want to omit this dependency
         if (!dir.exists()) {
             if(!createDirectoryIfNotExisting) {
@@ -146,7 +146,7 @@ public class BDBQueue {
             throw new IOException("File " + dir + " exists and is not a directory. Unable to create directory.");
         }
     }
- 
+
     /**
      * Retrieves and and removes element from the head of this queue.
      *
@@ -188,9 +188,9 @@ public class BDBQueue {
       final Cursor cursor = queueDatabase.openCursor(null, null);
 
       return new CloseableIterator<byte[]>() {
-          
+
         private byte[] nextValue;
-        
+
         @Override
         public void close() {
             cursor.close();
@@ -205,7 +205,7 @@ public class BDBQueue {
                         throw new IllegalStateException("Getting next element did not return successfully: " + status);
                     }
                     nextValue = status == OperationStatus.SUCCESS ? data.getData() : null;
-                } catch (DatabaseException e) {
+                } catch (final DatabaseException e) {
                     throw RuntimeExceptionWrapper.wrapIfNeeded(e);
                 }
                 return nextValue != null;
@@ -213,23 +213,23 @@ public class BDBQueue {
                 return true;
             }
         }
-        
+
         @Override
         public byte[] next() {
             if (hasNext()) {
-                byte[] v = nextValue;
+                final byte[] v = nextValue;
                 nextValue = null;
                 return v;
             } else {
                 throw new NoSuchElementException();
             }
         }
-        
+
         @Override
         public void remove() {
             cursor.delete();
         }
-          
+
       };
     }
 
@@ -254,7 +254,7 @@ public class BDBQueue {
           cursor.close();
       }
     }
-    
+
     /**
      * Removes the eldest element.
      *
@@ -279,7 +279,7 @@ public class BDBQueue {
             cursor.close();
         }
     }
- 
+
     /**
      * Pushes element to the tail of this queue.
      *
@@ -293,7 +293,7 @@ public class BDBQueue {
         final Cursor cursor = queueDatabase.openCursor(null, null);
         try {
             cursor.getLast(key, data, LockMode.RMW);
- 
+
             BigInteger prevKeyValue;
             if (key.getData() == null) {
                 prevKeyValue = BigInteger.valueOf(-1);
@@ -316,7 +316,7 @@ public class BDBQueue {
             cursor.close();
         }
     }
-    
+
     public synchronized int clear() {
         final DatabaseEntry key = new DatabaseEntry();
         final DatabaseEntry data = new DatabaseEntry();
@@ -327,16 +327,16 @@ public class BDBQueue {
                 cursor.delete();
                 itemsRemoved++;
             }
-            
+
             queueDatabase.sync();
             opsCounter = 0;
-            
+
             return itemsRemoved;
         } finally {
             cursor.close();
         }
     }
- 
+
    /**
      * Returns the size of this queue.
      *
@@ -345,7 +345,7 @@ public class BDBQueue {
     public long size() {
         return queueDatabase.count();
     }
-    
+
     /**
       * Determines if this queue is empty (equivalent to <code>{@link #size()} == 0</code>).
       *
@@ -354,7 +354,7 @@ public class BDBQueue {
      public boolean isEmpty() {
          return queueDatabase.count() == 0;
      }
- 
+
     /**
      * Returns this queue name.
      *
@@ -363,29 +363,37 @@ public class BDBQueue {
     public String getQueueName() {
         return queueName;
     }
- 
+
     /**
      * Closes this queue and frees up all resources associated to it.
      */
     public void close() {
+    	// When the current thread was interrupted db.close and dbEnv.close will complain:
+    	// "InterruptedException may cause incorrect internal state, unable to continue. Environment is invalid and must be closed."
+    	// First closing the environment also does not help, therefore we reset the interrupted state
+    	// and restore it after closing if it was set
+    	final boolean interrupted = Thread.interrupted();
         queueDatabase.close();
         dbEnv.close();
+        if(interrupted) {
+        	Thread.currentThread().interrupt();
+        }
     }
-    
+
     public static interface CloseableIterator<T> extends Iterator<T> {
         /**
          * Must be invoked when the iterator is no longer used.
          */
         void close();
     }
-    
+
 }
 
 /**
  * Key comparator for DB keys.
  */
 class KeyComparator implements Comparator<byte[]>, Serializable {
- 
+
     private static final long serialVersionUID = -7403144993786576375L;
 
     /**
@@ -400,5 +408,5 @@ class KeyComparator implements Comparator<byte[]>, Serializable {
     public int compare(final byte[] key1, final byte[] key2) {
         return new BigInteger(key1).compareTo(new BigInteger(key2));
     }
-    
+
 }

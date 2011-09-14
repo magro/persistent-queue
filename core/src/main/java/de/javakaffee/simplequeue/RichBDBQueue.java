@@ -25,30 +25,30 @@ import org.slf4j.LoggerFactory;
 /**
  * A wrapper around {@link BDBQueue} that provides json serialization and
  * blocking queue semantics.
- * 
+ *
  * Created on Jun 22, 2011
  *
  * @author Martin Grotzke (initial creation)
  */
 public class RichBDBQueue<T> {
-    
+
     private static final Logger LOG = LoggerFactory.getLogger(RichBDBQueue.class);
 
     private final ObjectMapper _mapper;
     private final BDBQueue _q;
     private final Class<T> _type;
     private long pauseTimeInMillis = 100;
-    
+
     private volatile boolean _doRun = true;
     private final Object _monitor = new Object();
 
     /**
      * Constructs the queue using the given file for persistence.
-     * 
+     *
      * @param queueBaseDir   queue database environment directory path
      * @param queueName      descriptive queue name
      * @param cacheSize      how often to sync the queue to disk
-     * 
+     *
      * @throws IOException thrown when the given file does not exist or is not writeable.
      */
     public RichBDBQueue(final File queueBaseDir, final String queueName, final int cacheSize, final Class<T> type) throws IOException {
@@ -80,9 +80,9 @@ public class RichBDBQueue<T> {
             _monitor.notifyAll();
         }
     }
-    
+
     /**
-     * Consume the queue using the given consumer. This method will run forever and feed the 
+     * Consume the queue using the given consumer. This method will run forever and feed the
      * consumer with new elements read from the queue. An element is removed from the queue
      * after it was consumed successfully (by {@link Consumer#consume(Object)}). If the consumer
      * fails consuming it, the element will try again. Therefore, if you can't process the element
@@ -119,12 +119,17 @@ public class RichBDBQueue<T> {
                     _q.remove();
                 }
             } catch(final RuntimeException e) {
+            	// If we got interrupted we want to exit, so that this client/consumer also is told to exit
+            	if(Thread.currentThread().isInterrupted()) {
+                    LOG.error("Consumer got interrupted, exiting / rethrowing exception.", e);
+                    throw e;
+            	}
                 LOG.error("Consumer could not read object.", e);
             }
         }
         return data != null;
     }
-    
+
     public void clear() {
         _q.clear();
     }
@@ -175,7 +180,7 @@ public class RichBDBQueue<T> {
 
     /**
      * The time in millis that {@link #consume(Consumer)} goes to sleep when the queue
-     * is empty before checking again. 
+     * is empty before checking again.
      * @return the pauseTimeInMillis
      */
     public long getPauseTimeInMillis() {
@@ -184,20 +189,20 @@ public class RichBDBQueue<T> {
 
     /**
      * Sets the time in millis that {@link #consume(Consumer)} goes to sleep when the queue
-     * is empty before checking again. 
+     * is empty before checking again.
      * @param pauseTimeInMillis the pauseTimeInMillis to set
      */
     public void setPauseTimeInMillis(final long pauseTimeInMillis) {
         this.pauseTimeInMillis = pauseTimeInMillis;
     }
-    
+
     /**
      * For testing only.
      */
     BDBQueue getQ() {
         return _q;
     }
-    
+
     /**
      * For testing only.
      */
