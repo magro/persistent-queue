@@ -258,7 +258,7 @@ public class BDBQueue {
     /**
      * Removes the eldest element.
      *
-     * @throw NoSuchElementException if the queue is empty
+     * @throws NoSuchElementException if the queue is empty
      */
     public synchronized void remove() throws NoSuchElementException {
         final DatabaseEntry key = new DatabaseEntry();
