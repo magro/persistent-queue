@@ -61,7 +61,7 @@
 					<descriptorRefs>
 						<descriptorRef>jar-with-dependencies</descriptorRef>
 					</descriptorRefs>
-					<finalName>listqueueentries-${version}</finalName>
+					<finalName>listqueueentries-${project.version}</finalName>
 				</configuration>
 			</plugin>
 		</plugins>
